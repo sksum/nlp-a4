@@ -36,18 +36,39 @@ def do_train(args, model, train_dataloader, save_dir="./out"):
     )
     model.train()
     progress_bar = tqdm(range(num_training_steps))
+    log_file = open(os.path.join(save_dir, "train_log.txt"), "w")
+    running_loss = 0.0
 
-    ################################
-    ##### YOUR CODE BEGINGS HERE ###
+    for epoch in range(num_epochs):
+        for batch in train_dataloader:
+            batch = {k: v.to(device) for k, v in batch.items()}
+            outputs = model(**batch)
+            loss = outputs.loss
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+            optimizer.step()
+            lr_scheduler.step()
+            optimizer.zero_grad()
+            running_loss += loss.item()
+            progress_bar.update(1)
+            if progress_bar.n % 1000 == 0:
+                log_file.write(f"step {progress_bar.n} loss {running_loss / 1000:.4f}\n")
+                log_file.flush()
+                running_loss = 0.0
+        correct = 0
+        model.eval()
+        with torch.no_grad():
+            for batch in DataLoader(small_eval_dataset, batch_size=64):
+                batch = {k: v.to(device) for k, v in batch.items()}
+                predictions = model(**batch).logits.argmax(-1)
+                correct += (predictions == batch["labels"]).sum().item()
+        accuracy = correct / len(small_eval_dataset)
+        print(f"Probe after epoch {epoch}: accuracy {accuracy:.4f}", flush=True)
+        log_file.write(f"epoch {epoch} probe accuracy {accuracy:.4f}\n")
+        log_file.flush()
+        model.train()
 
-    # Implement the training loop --- make sure to use the optimizer and lr_sceduler (learning rate scheduler)
-    # Remember that pytorch uses gradient accumumlation so you need to use zero_grad (https://pytorch.org/tutorials/recipes/recipes/zeroing_out_gradients.html)
-    # You can use progress_bar.update(1) to see the progress during training
-    # You can refer to the pytorch tutorial covered in class for reference
-
-    raise NotImplementedError
-
-    ##### YOUR CODE ENDS HERE ######
+    log_file.close()
 
     print("Training completed...")
     print("Saving Model....")
@@ -86,16 +107,13 @@ def do_eval(eval_dataloader, output_dir, out_file):
 
 # Created a dataladoer for the augmented training dataset
 def create_augmented_dataloader(args, dataset):
-    ################################
-    ##### YOUR CODE BEGINGS HERE ###
-
-    # Here, 'dataset' is the original dataset. You should return a dataloader called 'train_dataloader' -- this
-    # dataloader will be for the original training split augmented with 5k random transformed examples from the training set.
-    # You may find it helpful to see how the dataloader was created at other place in this code.
-
-    raise NotImplementedError
-
-    ##### YOUR CODE ENDS HERE ######
+    transformed_dataset = dataset["train"].shuffle(seed=42).select(range(5000)).map(custom_transform, load_from_cache_file=False)
+    transformed_dataset = transformed_dataset.map(tokenize_function, batched=True, load_from_cache_file=False)
+    transformed_dataset = transformed_dataset.remove_columns(["text"])
+    transformed_dataset = transformed_dataset.rename_column("label", "labels")
+    transformed_dataset.set_format("torch")
+    combined_dataset = datasets.concatenate_datasets([tokenized_dataset["train"], transformed_dataset])
+    train_dataloader = DataLoader(combined_dataset, shuffle=True, batch_size=args.batch_size)
 
     return train_dataloader
 

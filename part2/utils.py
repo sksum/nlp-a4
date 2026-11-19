@@ -1,4 +1,5 @@
 import sqlite3
+import time
 import numpy as np
 import os
 import re
@@ -125,6 +126,15 @@ def compute_records(processed_qs: List[str]):
 def compute_record(query_id, query):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
+    deadline = time.time() + 30
+
+    def _enforce_deadline():
+        if time.time() > deadline:
+            conn.interrupt()
+            return 1
+        return 0
+
+    conn.set_progress_handler(_enforce_deadline, 100000)
 
     try:
         cursor.execute(query)

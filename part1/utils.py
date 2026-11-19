@@ -34,18 +34,40 @@ def example_transform(example):
 # You can randomly select each word with some fixed probability to replace by a synonym.
 
 
+QWERTY_NEIGHBORS = {
+    "q": "wa", "w": "qeadsz", "e": "wrfsdc", "r": "etgdfx", "t": "ryhgfc", "y": "tujhgv",
+    "u": "yikjhb", "i": "uolkjn", "o": "iplkm", "p": "olk",
+    "a": "qwezsx", "s": "wedxza", "d": "erfcxs", "f": "rtgvcd", "g": "tyhbvf", "h": "yujnbg",
+    "j": "uikmnh", "k": "iolmj", "l": "opk",
+    "z": "asx", "x": "zsdc", "c": "xdfv", "v": "cfgb", "b": "vghn", "n": "bhjm", "m": "njk",
+}
+
+P_TYPO = 0.25
+P_SYN = 0.25
+
+
 def custom_transform(example):
-    ################################
-    ##### YOUR CODE BEGINGS HERE ###
-
-    # Design and implement the transformation as mentioned in pdf
-    # You are free to implement any transformation but the comments at the top roughly describe
-    # how you could implement two of them --- synonym replacement and typos.
-
-    # You should update example["text"] using your transformation
-
-    raise NotImplementedError
-
-    ##### YOUR CODE ENDS HERE ######
-
+    tokens = word_tokenize(example["text"])
+    transformed = []
+    for token in tokens:
+        if token.isalpha() and len(token) >= 4 and random.random() < P_TYPO:
+            idxs = [i for i in range(1, len(token)) if token[i].lower() in QWERTY_NEIGHBORS]
+            if idxs:
+                i = random.choice(idxs)
+                c = token[i]
+                sub = random.choice(QWERTY_NEIGHBORS[c.lower()])
+                sub = sub.upper() if c.isupper() else sub
+                transformed.append(token[:i] + sub + token[i + 1:])
+                continue
+        if token.isalpha() and len(token) >= 3 and random.random() < P_SYN:
+            lower = token.lower()
+            lemmas = [lemma for syn in wordnet.synsets(lower) for lemma in syn.lemma_names()
+                      if lemma.isalpha() and lemma.lower() != lower]
+            if lemmas:
+                replacement = random.choice(lemmas)
+                replacement = replacement.capitalize() if token[0].isupper() else replacement
+                transformed.append(replacement)
+                continue
+        transformed.append(token)
+    example["text"] = TreebankWordDetokenizer().detokenize(transformed)
     return example
