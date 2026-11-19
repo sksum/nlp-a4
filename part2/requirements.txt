@@ -3,7 +3,7 @@ torch==2.1.2
 tokenizers==0.19.1
 transformers==4.40.0
 accelerate==0.29.3
-nltk==3.8.1
+nltk==3.10.4
 tqdm==4.66.1
 pytest==7.4.4
 hypothesis==6.96.1
